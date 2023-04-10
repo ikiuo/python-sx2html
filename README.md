@@ -63,6 +63,13 @@ HTML の
     (tr (@while [fCol "fCol = True; nCol = 1"] ["nCol += 1; fCol = (nCol <= 3)"]
      (td (@python "HTML = f'{nLine} * {nCol} = {nLine * nCol}'"))))))
 
+  (#comment
+    '(@unless [判定変数 初期化] [更新1] [更新2]... 内容)'
+    '(@when [判定変数 初期化] [更新1] [更新2]... 内容)'
+    "初期化と更新は python を呼び出します")
+  (@when [flag "flag = True"] ["flag = False"] (p "when が実行された"))
+  (@unless [flag] (p "unless が実行された"))
+
   (script """[
      // JavaScript: (予定)
      // End:
@@ -95,6 +102,8 @@ HTML の
       <tr><td>2 * 1 = 2</td><td>2 * 2 = 4</td><td>2 * 3 = 6</td></tr>
       <tr><td>3 * 1 = 3</td><td>3 * 2 = 6</td><td>3 * 3 = 9</td></tr>
     </table>
+    <p>when が実行された</p>
+    <p>unless が実行された</p>
     <script>
       // JavaScript: (予定)
       // End:

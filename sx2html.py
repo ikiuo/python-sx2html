@@ -371,6 +371,8 @@ class GenHTML(Parser):
     }
 
     TAG_ATTRIBUTE = {
+        '@unless',
+        '@when',
         '@while',
     }
 
@@ -528,6 +530,10 @@ class GenHTML(Parser):
         def get_children_string():
             return self.build_text(get_children())
 
+        if ltag == '@unless':
+            return self.build_unless(element.attribute, element.children)
+        if ltag == '@when':
+            return self.build_when(element.attribute, element.children)
         if ltag == '@while':
             return self.build_while(element.attribute, element.children)
 
@@ -552,8 +558,6 @@ class GenHTML(Parser):
             if ltag == '$python':
                 return self.build_python_run(element.children)
 
-            if self.debug:
-                self.dprintn(f'NOT IMPLMENETED YET: {tag}')
             return []
 
         if not ltag:
@@ -616,6 +620,28 @@ class GenHTML(Parser):
                     f'<rt>{self.escape(v)}</rt>'
                     f'<rp>)</rp>'
                 ))
+        return text
+
+    def build_unless(self, attributes, elements):
+        params = [[e.text for el in attr for e in el] for attr in attributes]
+        text = []
+        if params and params[0]:
+            name = params[0][0]
+            [self.pyexec(s) for s in params[0][1:]]
+            if not (name in self.locals and self.locals[name]):
+                text += self.build_element_children(elements)
+                [self.pyexec(s) for param in params[1:] for s in param]
+        return text
+
+    def build_when(self, attributes, elements):
+        params = [[e.text for el in attr for e in el] for attr in attributes]
+        text = []
+        if params and params[0]:
+            name = params[0][0]
+            [self.pyexec(s) for s in params[0][1:]]
+            if name in self.locals and self.locals[name]:
+                text += self.build_element_children(elements)
+                [self.pyexec(s) for param in params[1:] for s in param]
         return text
 
     def build_while(self, attributes, elements):
