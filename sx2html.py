@@ -47,8 +47,7 @@ class String(str):
 class Stream:
     def __init__(self, name, stream=None):
         self.name = name if name != '-' else '[STDIN]'
-        self.stream = (stream if stream else
-                       (sys.stdin if name == '-' else open(name)))
+        self.stream = (stream if stream else (sys.stdin if name == '-' else open(name)))
         self.lines = []
         self.line = ''
         self.lnum = 0
@@ -103,17 +102,19 @@ class Stream:
 
 
 class SxElement():
+    BRACKET = {'': '', '(': ')', '[': ']', '{': '}'}
+
     def __init__(self, bracket, value=None):
         self.open = bracket
-        self.close = Lexer.BRACKET[bracket]
+        self.close = SxElement.BRACKET[bracket]
         self.children = []
         self.value = value
 
     def __len__(self):
-        return self.children.__len__()
+        return len(self.children)
 
     def __iter__(self):
-        return self.children.__iter__()
+        return iter(self.children)
 
     def has_value(self):
         return self.value != None
@@ -146,11 +147,14 @@ class SxElement():
 
 
 class Lexer:
-    WSTOP = '()[]{}\'"'
-    BRACKET = {'': '', '(': ')', '[': ']', '{': '}'}
+    SPACE = {chr(n) for n in range(33)}
+    WSTOP = {c for c in ('()[]{}\'"' + ''.join(chr(n) for n in range(33)))}
 
     def __init__(self, stream, **option):
+        self.SPACE = Lexer.SPACE
         self.WSTOP = Lexer.WSTOP
+        self.BRACKET_OPEN = {'(', '[', '{'}
+        self.BRACKET_CLOSE = {')', ']', '}'}
         self.stream = stream
         self.debug = option['debug']
 
@@ -181,17 +185,18 @@ class Lexer:
             return self.getquote(ch)
         if ch == "'":
             return self.getquote(ch)
-        if ch in '([{':
+        if ch in self.BRACKET_OPEN:
             return ('o', ch)
-        if ch in ')]}':
+        if ch in self.BRACKET_CLOSE:
             return ('c', ch)
-        if ord(ch) < 33:
+        if ch in self.SPACE:
             return self.getspace(ch)
         return self.getword(ch)
 
     def getspace(self, space):
+        SPACE = self.SPACE
         for ch in self.stream:
-            if ord(ch) >= 33:
+            if ch not in SPACE:
                 self.stream.putchar(ch)
                 break
             space += ch
@@ -200,7 +205,7 @@ class Lexer:
     def getword(self, word):
         stop = self.WSTOP
         for ch in self.stream:
-            if ord(ch) < 33 or ch in stop:
+            if ch in stop:
                 self.stream.putchar(ch)
                 break
             word += ch
@@ -212,6 +217,9 @@ class Lexer:
         for ch in self.stream:
             if escape:
                 escape = False
+                if ch == 'n':
+                    qstr += '\n'
+                    continue
                 qstr += ch
                 continue
             if ch == '\\':
@@ -321,6 +329,13 @@ class Text(str):
 
 
 class GenHTML(Parser):
+    class BuildTextStats:
+        def __init__(self):
+            self.text = ''
+            self.level = 0
+            self.indent = ''
+            self.newline = ''
+
     TAG_SINGLE = {
         'area',
         'base', 'bgsound', 'br',
@@ -370,11 +385,7 @@ class GenHTML(Parser):
         'style',
     }
 
-    TAG_ATTRIBUTE = {
-        '@unless',
-        '@when',
-        '@while',
-    }
+    # --------------------
 
     @staticmethod
     def qstrip(s):
@@ -383,7 +394,7 @@ class GenHTML(Parser):
         return s
 
     @staticmethod
-    def escape(s):
+    def encode(s):
         return (s.replace('&', '&amp;').replace('<', '&lt;')
                 .replace('>', '&gt;').replace('"', '&quot;'))
 
@@ -402,8 +413,30 @@ class GenHTML(Parser):
         return subprocess.run(args=[command, '-'], input=stdin.encode('utf-8'),
                               capture_output=True, check=True).stdout.decode()
 
+    # --------------------
+
     def __init__(self, stream, **option):
         super().__init__(stream, **option)
+
+        self.TAG_FLOWCONTROL = {
+            '@unless': self.build_unless,
+            '@when': self.build_when,
+            '@while': self.build_while,
+        }
+        self.TAG_COMMAND = {
+            '!doctype': self.build_doctype,
+            '@comment': self.build_comment,
+            # '#comment': self.build_none,
+            '@ruby': self.build_ruby,
+            '@python': self.build_python_exec,
+            '$python': self.build_python_run,
+        }
+        self.OPEN_TYPE = {
+            '(': self.parse_element_tag,
+            '[': self.parse_element_attribute,
+            '{': self.parse_element_data,
+            '': self.parse_element_text,
+        }
 
         self.altindent = option['altindent'] if 'altindent' in option else True
         self.tab_width = option['tab_width'] if 'tab_width' in option else TAB_WIDTH
@@ -417,6 +450,10 @@ class GenHTML(Parser):
         self.text_enter = Text.create(Text.ENTER)
         self.text_leave = Text.create(Text.LEAVE)
         self.text_newline = Text('\n')
+
+        self.plain = False
+
+    # --------------------
 
     def is_single(self, tag):
         return tag.lower() in self.TAG_SINGLE
@@ -449,6 +486,11 @@ class GenHTML(Parser):
             self.dprintn(f'Python exec: {repr(src)}')
         exec(src, self.globals, self.locals)
 
+    def pyvalue(self, name):
+        return self.locals[name] if name and name in self.locals else None
+
+    # --------------------
+
     def generate(self):
         cwd = None
         path = self.stream.name
@@ -462,32 +504,28 @@ class GenHTML(Parser):
             os.chdir(cwd)
         return self.root and self.build(self.root) or ''
 
+    # --------------------
+
     def parse_element(self, element):
-        if element.open == '(':
-            return self.parse_element_tag(element.children)
-        if element.open == '[':
-            return self.parse_element_attribute(element.children)
-        if element.open == '{':
-            return self.parse_element_data(element.children)
-        text = element.get_string() if not element.is_type('s') else ''
-        children = self.parse_element_children(element.children)
-        return Element(text=text, children=children)
+        return self.OPEN_TYPE[element.open](element)
 
     def parse_element_children(self, children):
         return [self.parse_element(child) for child in children]
 
-    def parse_element_tag(self, elements):
+    def parse_element_tag(self, element):
+        elements = element.children
         tag = elements[0].get_string()
         allchildren = self.parse_element_children(elements[1:])
         attributes = [c for c in allchildren if c.tag is None and c.attribute]
-        if tag in self.TAG_ATTRIBUTE:
+        if tag in self.TAG_FLOWCONTROL:
             attribute = [c.attribute for c in attributes]
         else:
             attribute = reduce(lambda p, v: p + v.attribute, attributes, [])
         children = [c for c in allchildren if c.tag or not c.attribute]
         return Element(tag=tag, attribute=attribute, children=children)
 
-    def parse_element_attribute(self, elements):
+    def parse_element_attribute(self, element):
+        elements = element.children
         params = []
         data = []
         for elem in elements:
@@ -503,8 +541,16 @@ class GenHTML(Parser):
             params += [data]
         return Element(attribute=params)
 
-    def parse_element_data(self, elements):
-        return Element(text=self.read_source(elements))
+    def parse_element_data(self, element):
+        return Element(text=self.parse_element_source(element.children))
+
+    def parse_element_text(self, element):
+        text = element.get_string() if not element.is_type('s') else ''
+        children = self.parse_element_children(element.children)
+        return Element(text=text, children=children)
+
+    def parse_element_source(self, param):
+        return ''.join(open(code.get_string()).read() for code in param if not code.is_type('s'))
 
     def parse_dump(self, element, level=0):
         indent = '  ' * level
@@ -513,6 +559,8 @@ class GenHTML(Parser):
               f' text={repr(element.text)})')
         for child in element.children:
             self.parse_dump(child, level + 1)
+
+    # --------------------
 
     def build(self, element):
         html = self.build_text(self.build_element(element))
@@ -524,69 +572,57 @@ class GenHTML(Parser):
         tag = element.tag
         ltag = tag.lower() if tag else ''
 
-        def get_children():
-            return self.build_element_children(element.children)
-
-        def get_children_string():
-            return self.build_text(get_children())
-
-        if ltag == '@unless':
-            return self.build_unless(element.attribute, element.children)
-        if ltag == '@when':
-            return self.build_when(element.attribute, element.children)
-        if ltag == '@while':
-            return self.build_while(element.attribute, element.children)
+        flowcontrol = self.TAG_FLOWCONTROL.get(ltag)
+        if flowcontrol:
+            name, updater = self.build_flowcontrol(element)
+            return flowcontrol(element.children, name, updater) if name else []
 
         attribute = self.build_attribute_text(element.attribute)
-
-        if ltag and ltag[0] in '!#$@':
-            if ltag == '!doctype':
-                doctype = self.build_text(get_children()).strip()
-                doctype = ' ' + doctype if doctype else doctype
-                return [self.text_indent, Text(f'<{tag}{doctype}>'), self.text_newline]
-            if ltag == '@comment':
-                return [self.text_indent, Text('<!-- '),
-                        Text(get_children_string()),
-                        Text(' -->')]
-            if ltag == '#comment':
-                return []
-            if ltag == '@ruby':
-                ruby = self.build_element_ruby(element.children)
-                return [Text(f'<ruby{attribute}>'), *ruby, Text('</ruby>')]
-            if ltag == '@python':
-                return self.build_python_exec(element.children)
-            if ltag == '$python':
-                return self.build_python_run(element.children)
-
-            return []
 
         if not ltag:
             if element.attribute:
                 raise Exception(f'Bug??\n  attribute={repr(element.attribute)}')
-            children = get_children()
+            children = self.get_element_children(element)
             text = element.text
             if text:
-                children.append(Text(text))
+                children.append(Text(text if self.plain else self.encode(text)))
             return children
+
+        if ltag[0] in '!#$@':
+            return self.TAG_COMMAND.get(ltag, self.build_none)(tag, attribute, element)
 
         stag, etag = (f'<{tag}{attribute}>', f'</{tag}>')
 
+        if ltag in self.TAG_ALTCODE:
+            text = self.get_element_children_text(element)
+            return [self.text_indent,
+                    Text(stag), self.text_newline,
+                    self.text_enter, Text.create_reindent(text),
+                    self.text_leave, self.text_indent,
+                    Text(etag), self.text_newline]
+
+        children = self.get_element_children(element)
+
         if ltag in self.TAG_EMBED:
             return ((ltag in self.TAG_SINGLE) and [Text(stag)] or
-                    [Text(stag), *get_children(), Text(etag)])
+                    [Text(stag), *children, Text(etag)])
         if ltag in self.TAG_SINGLE:
             return [self.text_indent, Text(stag)]
         if ltag in self.TAG_INDIVIDUAL:
-            return [self.text_indent, Text(stag), *get_children(), Text(etag)]
-        if ltag in self.TAG_ALTCODE:
-            return [self.text_indent,
-                    Text(stag), self.text_newline,
-                    self.text_enter, Text.create_reindent(get_children_string()),
-                    self.text_leave, self.text_indent,
-                    Text(etag), self.text_newline]
+            return [self.text_indent, Text(stag), *children, Text(etag)]
         return [self.text_indent, Text(stag),
-                self.text_enter, *get_children(),
+                self.text_enter, *self.get_element_children(element),
                 self.text_leave, Text(etag), self.text_newline]
+
+    def get_element_children(self, element):
+        return self.build_element_children(element.children)
+
+    def get_element_children_text(self, element):
+        p = self.plain
+        self.plain = True
+        t = self.build_text(self.get_element_children(element))
+        self.plain = p
+        return t
 
     def build_element_children(self, children):
         return reduce(lambda p, v: p + self.build_element(v), children, [])
@@ -616,60 +652,11 @@ class GenHTML(Parser):
                 k, v = s[n], t[n]
                 self.rubymap[k] = v
                 text.append(Text(
-                    f'{self.escape(k)}<rp>(</rp>'
-                    f'<rt>{self.escape(v)}</rt>'
+                    f'{self.encode(k)}<rp>(</rp>'
+                    f'<rt>{self.encode(v)}</rt>'
                     f'<rp>)</rp>'
                 ))
         return text
-
-    def build_unless(self, attributes, elements):
-        params = [[e.text for el in attr for e in el] for attr in attributes]
-        text = []
-        if params and params[0]:
-            name = params[0][0]
-            [self.pyexec(s) for s in params[0][1:]]
-            if not (name in self.locals and self.locals[name]):
-                text += self.build_element_children(elements)
-                [self.pyexec(s) for param in params[1:] for s in param]
-        return text
-
-    def build_when(self, attributes, elements):
-        params = [[e.text for el in attr for e in el] for attr in attributes]
-        text = []
-        if params and params[0]:
-            name = params[0][0]
-            [self.pyexec(s) for s in params[0][1:]]
-            if name in self.locals and self.locals[name]:
-                text += self.build_element_children(elements)
-                [self.pyexec(s) for param in params[1:] for s in param]
-        return text
-
-    def build_while(self, attributes, elements):
-        params = [[e.text for el in attr for e in el] for attr in attributes]
-        text = []
-        if params and params[0]:
-            name = params[0][0]
-            [self.pyexec(s) for s in params[0][1:]]
-            while name in self.locals and self.locals[name]:
-                text += self.build_element_children(elements)
-                [self.pyexec(s) for param in params[1:] for s in param]
-        return text
-
-    def build_python(self, elements, callback):
-        text = []
-        for element in elements:
-            if element.tag:
-                text += self.build_element(element)
-            else:
-                text.append(Text(callback(element.text)))
-        return text
-
-    def build_python_exec(self, elements):
-        return self.build_python(elements, lambda s: self.exec(s))
-
-    def build_python_run(self, elements):
-        def cb(s): return self.run(PYTHON_COMMAND, self.reindent('', s))
-        return self.build_python(elements, cb)
 
     def build_attribute_text(self, attributes):
         if not attributes:
@@ -679,7 +666,7 @@ class GenHTML(Parser):
             attr = ''.join(self.build_text(self.build_element(element)) for element in elements)
             adata = attr.split('=', 1)
             value = self.qstrip(adata[1] if len(adata) > 1 else '')
-            text += f' {adata[0]}="{self.escape(value)}"'
+            text += f' {adata[0]}="{self.encode(value)}"'
         return text
 
     def build_text(self, texts):
@@ -689,22 +676,19 @@ class GenHTML(Parser):
         newline = ''
         for text in texts:
             if text.mode == Text.TEXT:
-                if '\n' in text:
+                if not newline and '\n' in text:
                     newline = '\n'
                 r += text
-                continue
-            if text.mode == Text.INDENT:
+            elif text.mode == Text.INDENT:
                 if r and r[-1] != '\n':
                     r += '\n'
                 r += indent + text
-                continue
-            if text.mode == Text.ENTER:
+            elif text.mode == Text.ENTER:
                 newline = ''
                 level += 1
                 indent = '  ' * level
                 r += text
-                continue
-            if text.mode == Text.LEAVE:
+            elif text.mode == Text.LEAVE:
                 level -= 1
                 indent = '  ' * level
                 if newline:
@@ -713,19 +697,73 @@ class GenHTML(Parser):
                     r += indent
                 r += text
                 newline = '\n'
-                continue
-            if text.mode == Text.REINDENT:
+            elif text.mode == Text.REINDENT:
                 r += self.reindent(indent, text)
-                continue
-            raise Exception('Bug!!')
+            else:
+                raise Exception('Bug!!')
         return r
 
-    def read_source(self, param):
-        r = ''
-        for code in param:
-            if not code.is_type('s'):
-                r += open(code.get_string()).read()
-        return r
+    # --------------------
+
+    def build_none(self, tag, attribute, element):
+        return []
+
+    def build_doctype(self, tag, attribute, element):
+        doctype = self.get_element_children_text(element).strip()
+        doctype = ' ' + doctype if doctype else doctype
+        return [self.text_indent, Text(f'<{tag}{doctype}>'), self.text_newline]
+
+    def build_comment(self, tag, attribute, element):
+        text = self.get_element_children_text(element)
+        return [self.text_indent, Text('<!-- '), Text(text), Text(' -->')]
+
+    def build_ruby(self, tag, attribute, element):
+        tag, ruby = tag[1:], self.build_element_ruby(element.children)
+        return [Text(f'<{tag}{attribute}>'), *ruby, Text(f'</{tag}>')]
+
+    # --------------------
+
+    def build_flowcontrol(self, element):
+        params = [[e.text for el in attr for e in el]
+                  for attr in element.attribute]
+        if not (params and params[0]):
+            return (None, None)
+        name = params[0][0]
+        for s in params[0][1:]:
+            self.pyexec(s)
+
+        def updater():
+            t = self.build_element_children(element.children)
+            for param in params[1:]:
+                for s in param:
+                    self.pyexec(s)
+            return t
+        return (name, updater)
+
+    def build_unless(self, elements, name, updater):
+        return updater() if not self.pyvalue(name) else []
+
+    def build_when(self, elements, name, updater):
+        return updater() if self.pyvalue(name) else []
+
+    def build_while(self, elements, name, updater):
+        text = []
+        while self.pyvalue(name):
+            text += updater()
+        return text
+
+    # --------------------
+
+    def build_python(self, elements, callback):
+        return reduce(lambda p, e: p + (self.build_element(e) if e.tag else [Text(callback(e.text))]), elements, [])
+
+    def build_python_exec(self, tag, attribute, element):
+        return self.build_python(element.children, lambda s: self.exec(s))
+
+    def build_python_run(self, tag, attribute, element):
+        return self.build_python(element.children, lambda s: self.run(PYTHON_COMMAND, self.reindent('', s)))
+
+    # --------------------
 
     def dprint(self, *args, **kwargs):
         sys.stderr.write(' '.join(str(arg) for arg in args))
