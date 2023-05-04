@@ -688,7 +688,7 @@ class GenHTML(Parser):
                 if len(vals) == 1:
                     smap = [[keys, vals[0]]]
                 else:
-                    smap = [[v, (vals[n] if n < len(vals) else v)]
+                    smap = [[v, (vals[n] if n < len(vals) else '')]
                             for n, v in enumerate(keys)]
             self.rubymap[keys] = smap
 
