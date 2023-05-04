@@ -686,25 +686,16 @@ class GenHTML(Parser):
             if len(rpdata) > 1:
                 vals = rpdata[1].split(',')
                 if len(vals) == 1:
-                    smap = vals[0]
+                    smap = [[keys, vals[0]]]
                 else:
-                    smap = list(keys)
-                    for index in range(min(len(keys), len(vals))):
-                        smap[index] = vals[index]
+                    smap = [[v, (vals[n] if n < len(vals) else v)]
+                            for n, v in enumerate(keys)]
             self.rubymap[keys] = smap
 
-            if isinstance(smap, str):
+            for rbase, rtext in smap:
                 text.append(Text(
-                    f'{self.encode(keys)}<rp>(</rp>'
-                    f'<rt>{self.encode(smap)}</rt>'
-                    f'<rp>)</rp>'
-                ))
-                continue
-
-            for index in range(len(keys)):
-                text.append(Text(
-                    f'{self.encode(keys[index])}<rp>(</rp>'
-                    f'<rt>{self.encode(smap[index])}</rt>'
+                    f'{self.encode(rbase)}<rp>(</rp>'
+                    f'<rt>{self.encode(rtext)}</rt>'
                     f'<rp>)</rp>'
                 ))
         return text
