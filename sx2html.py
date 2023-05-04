@@ -445,8 +445,9 @@ class GenHTML(Parser):
         self.tag_command = {
             '!doctype': self.build_doctype,
             '@comment': self.build_comment,
-            # '#comment': self.build_none,
+            #'#comment': self.build_none,
             '@ruby': self.build_ruby,
+            '#ruby': self.build_ruby_dict,
             '@python': self.build_python_exec,
             '$python': self.build_python_run,
         }
@@ -679,7 +680,7 @@ class GenHTML(Parser):
             rpdata = param.split(':', 1)
             if len(rpdata) == 1:
                 vals = self.rubymap.get(rpdata[0])
-                if not vals:
+                if vals is None:
                     continue
                 rpdata.append(vals)
 
@@ -753,6 +754,10 @@ class GenHTML(Parser):
     def build_comment(self, _tag, _attribute, element):
         text = self.get_element_children_text(element)
         return [self.text_indent, Text('<!-- '), Text(text), Text(' -->')]
+
+    def build_ruby_dict(self, _tag, _attribute, element):
+        self.get_element_children_text(element)
+        return []
 
     def build_ruby(self, tag, attribute, element):
         tag, ruby = tag[1:], self.build_element_ruby(element.children)
