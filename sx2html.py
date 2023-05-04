@@ -445,7 +445,7 @@ class GenHTML(Parser):
         self.tag_command = {
             '!doctype': self.build_doctype,
             '@comment': self.build_comment,
-            #'#comment': self.build_none,
+            # '#comment': self.build_none,
             '@ruby': self.build_ruby,
             '#ruby': self.build_ruby_dict,
             '@python': self.build_python_exec,
@@ -678,22 +678,33 @@ class GenHTML(Parser):
             if not param:
                 continue
             rpdata = param.split(':', 1)
-            if len(rpdata) == 1:
-                vals = self.rubymap.get(rpdata[0])
-                if vals is None:
-                    continue
-                rpdata.append(vals)
+            keys = rpdata[0]
+            smap = self.rubymap.get(keys)
+            if smap is None and len(rpdata) == 1:
+                text.append(Text(keys))
+                continue
+            if len(rpdata) > 1:
+                vals = rpdata[1].split(',')
+                if len(vals) == 1:
+                    smap = vals[0]
+                else:
+                    smap = list(keys)
+                    for index in range(min(len(keys), len(vals))):
+                        smap[index] = vals[index]
+            self.rubymap[keys] = smap
 
-            key, val = rpdata
-            self.rubymap[key] = val
-
-            keys, vals = rpdata[0], rpdata[1].split(',')
-            for index in range(min(len(keys), len(vals))):
-                key, val = keys[index], vals[index]
-                self.rubymap[key] = val
+            if isinstance(smap, str):
                 text.append(Text(
-                    f'{self.encode(key)}<rp>(</rp>'
-                    f'<rt>{self.encode(val)}</rt>'
+                    f'{self.encode(keys)}<rp>(</rp>'
+                    f'<rt>{self.encode(smap)}</rt>'
+                    f'<rp>)</rp>'
+                ))
+                continue
+
+            for index in range(len(keys)):
+                text.append(Text(
+                    f'{self.encode(keys[index])}<rp>(</rp>'
+                    f'<rt>{self.encode(smap[index])}</rt>'
                     f'<rp>)</rp>'
                 ))
         return text
