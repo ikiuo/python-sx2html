@@ -31,6 +31,16 @@ HTML の
      }
    ]"""))
 
+ (#comment "#ruby で辞書を事前登録")
+ (#ruby
+  (@ruby "辞書:じ,しょ")
+  (@ruby "自動的:じ,どう,てき")
+  (@ruby "使用:し,よう")
+  (@ruby "文字列:も,じ,れつ")
+  (@ruby "生成:せい,せい")
+  (@ruby "抽出:ちゅう,しゅつ")
+  (@ruby "表記:ひょう,き"))
+
  (body
   (@comment "--> <p>@comment による悪戯</p> <!--")
   (p クォートしなくても大丈夫だけど(br)空白や記号により意図しない結果になる場合あり)
@@ -43,6 +53,7 @@ HTML の
      (ruby "漢" (rp "(")(rt "かん")(rp ")") "字" (rp "(")(rt "じ")(rp ")")) "は" (br)
      (@ruby "漢字:かんじ") "や" (@ruby "漢字:かん,じ") "表記になり、" (br)
      "コロンがないと、最後の" (@ruby "漢字") "が使用される")
+  (p ($ruby "$rubyでは辞書にある文字列を自動的に抽出して<ruby>を生成する"))
 
   (#comment "以前実行した @python 内容を参照可能")
   (#comment "HTML 変数は実行前に None で初期化されていて、設定すると反映する")
@@ -70,8 +81,12 @@ HTML の
   (@when [flag "flag = True"] ["flag = False"] (p "when が実行された"))
   (@unless [flag] (p "unless が実行された"))
 
+  (pre """[
+// <pre>...</pre>
+]""")
+
   (script """[
-     // JavaScript: (予定)
+     // JavaScript: <予定>
      // End:
    ]""")))
 ```
@@ -93,8 +108,12 @@ HTML の
   </head>
   <body>
     <!-- --> <p>@comment による悪戯</p> <!-- -->
-    <p>クォートしなくても大丈夫だけど<br>空白や記号により意図しない結果になる場合あり</p>
-    <p><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>は<br><ruby>漢<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>表記になり、<br>コロンがないと、最後の<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>が使用される</p>
+    <p>クォートしなくても大丈夫だけど
+      <br>空白や記号により意図しない結果になる場合あり</p>
+    <p><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>は
+      <br><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>表記になり、
+      <br>コロンがないと、最後の<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>が使用される</p>
+    <p>$rubyでは<ruby>辞<rp>(</rp><rt>じ</rt><rp>)</rp>書<rp>(</rp><rt>しょ</rt><rp>)</rp></ruby>にある<ruby>文<rp>(</rp><rt>も</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp>列<rp>(</rp><rt>れつ</rt><rp>)</rp></ruby>を<ruby>自<rp>(</rp><rt>じ</rt><rp>)</rp>動<rp>(</rp><rt>どう</rt><rp>)</rp>的<rp>(</rp><rt>てき</rt><rp>)</rp></ruby>に<ruby>抽<rp>(</rp><rt>ちゅう</rt><rp>)</rp>出<rp>(</rp><rt>しゅつ</rt><rp>)</rp></ruby>して&lt;ruby&gt;を<ruby>生<rp>(</rp><rt>せい</rt><rp>)</rp>成<rp>(</rp><rt>せい</rt><rp>)</rp></ruby>する</p>
     <p>Python Test - exec(): OK</p>
     <p>Python Test - run(): OK</p>
     <table border="1" style="text-align: center">
@@ -104,8 +123,11 @@ HTML の
     </table>
     <p>when が実行された</p>
     <p>unless が実行された</p>
+    <pre>
+// &lt;pre&gt;...&lt;/pre&gt;
+    </pre>
     <script>
-      // JavaScript: (予定)
+      // JavaScript: <予定>
       // End:
     </script>
   </body>

@@ -3,6 +3,7 @@
 import os
 import sys
 import subprocess
+import time
 
 from functools import reduce
 
@@ -357,6 +358,30 @@ class Text(str):
         return Text(text).setparam(Text.REINDENT)
 
 
+class RubyMap:
+    def __init__(self):
+        self.child = {}
+        self.value = []
+
+    def get(self, key):
+        rmap = self
+        for kchr in key:
+            rmap = rmap.child.get(kchr)
+            if rmap is None:
+                return None
+        return rmap.value
+
+    def set(self, key, value):
+        rmap = self
+        for kchr in key:
+            child = rmap.child.get(kchr)
+            if not child:
+                child = RubyMap()
+                rmap.child[kchr] = child
+            rmap = child
+        rmap.value = value
+
+
 class GenHTML(Parser):
     class BuildTextStats:
         def __init__(self):
@@ -446,8 +471,10 @@ class GenHTML(Parser):
             '!doctype': self.build_doctype,
             '@comment': self.build_comment,
             # '#comment': self.build_none,
+            '$date': self.build_date,
             '@ruby': self.build_ruby,
             '#ruby': self.build_ruby_dict,
+            '$ruby': self.build_ruby_auto,
             '@python': self.build_python_exec,
             '$python': self.build_python_run,
         }
@@ -468,7 +495,7 @@ class GenHTML(Parser):
 
         self.globals = {}
         self.locals = {}
-        self.rubymap = {}
+        self.rubymap = RubyMap()
 
         self.root = None
         self.text_indent = Text.create(Text.INDENT)
@@ -529,6 +556,31 @@ class GenHTML(Parser):
 
     # --------------------
 
+    def update_ruby_dict(self, text):
+        rpdata = text.split(':', 1)
+        keys = rpdata[0].strip()
+        smap = self.rubymap.get(keys)
+        if smap is None and len(rpdata) == 1:
+            return None
+        if len(rpdata) > 1:
+            vals = [v.strip() for v in rpdata[1].split(',')]
+            if len(vals) == 1:
+                smap = [[keys, vals[0]]]
+            else:
+                smap = [[v, (vals[n] if n < len(vals) else '')]
+                        for n, v in enumerate(keys)]
+        self.rubymap.set(keys, smap)
+        return smap
+
+    def update_ruby_dict_file(self, path):
+        with open(path, encoding='utf-8') as dicfp:
+            for line in dicfp.readlines():
+                line = line.strip()
+                if line and line[0] != '#':
+                    self.update_ruby_dict(line)
+
+    # --------------------
+
     def generate(self):
         cwd = None
         path = self.stream.name
@@ -538,9 +590,10 @@ class GenHTML(Parser):
                 cwd = os.getcwd()
                 os.chdir(wdir)
         self.root = self.parse_element(self.tree)
+        text = self.build(self.root) if self.root else ''
         if cwd:
             os.chdir(cwd)
-        return self.root and self.build(self.root) or ''
+        return text
 
     # --------------------
 
@@ -616,7 +669,7 @@ class GenHTML(Parser):
             name, updater = self.build_flowcontrol(element)
             return flowcontrol(element.children, name, updater) if name else []
 
-        attribute = self.build_attribute_text(element.attribute)
+        attribute = self.build_attribute_list(element.attribute)
 
         if not ltag:
             children = self.get_element_children(element)
@@ -628,7 +681,7 @@ class GenHTML(Parser):
         if ltag[0] in '!#$@':
             return self.tag_command.get(ltag, self.build_none)(tag, attribute, element)
 
-        stag, etag = (f'<{tag}{attribute}>', f'</{tag}>')
+        stag, etag = (f'<{tag}{self.build_attribute_text(attribute)}>', f'</{tag}>')
 
         if ltag in self.TAG_ALTCODE:
             text = self.get_element_children_text(element)
@@ -677,39 +730,24 @@ class GenHTML(Parser):
             param = element.text
             if not param:
                 continue
-            rpdata = param.split(':', 1)
-            keys = rpdata[0]
-            smap = self.rubymap.get(keys)
-            if smap is None and len(rpdata) == 1:
-                text.append(Text(keys))
-                continue
-            if len(rpdata) > 1:
-                vals = rpdata[1].split(',')
-                if len(vals) == 1:
-                    smap = [[keys, vals[0]]]
-                else:
-                    smap = [[v, (vals[n] if n < len(vals) else '')]
-                            for n, v in enumerate(keys)]
-            self.rubymap[keys] = smap
-
-            for rbase, rtext in smap:
-                text.append(Text(
-                    f'{self.encode(rbase)}<rp>(</rp>'
-                    f'<rt>{self.encode(rtext)}</rt>'
-                    f'<rp>)</rp>'
-                ))
+            smap = self.update_ruby_dict(param)
+            if smap is None:
+                text.append(Text(param.split(':', 1)[0]))
+            else:
+                text += self.build_text_ruby(smap)
         return text
 
-    def build_attribute_text(self, attributes):
-        if not attributes:
-            return ''
-        text = ''
-        for elements in attributes:
+    def build_attribute_list(self, attributes):
+        rlist = []
+        for elements in (attributes if attributes else []):
             attr = ''.join(self.build_text(self.build_element(element)) for element in elements)
             adata = attr.split('=', 1)
             value = self.qstrip(adata[1] if len(adata) > 1 else '')
-            text += f' {adata[0]}="{self.encode(value)}"'
-        return text
+            rlist.append([adata[0], value])
+        return rlist
+
+    def build_attribute_text(self, attributes):
+        return ''.join(f' {name}="{self.encode(value)}"' for name, value in attributes)
 
     def build_text(self, texts):
         rtext = ''
@@ -743,6 +781,13 @@ class GenHTML(Parser):
                 rtext += self.reindent(indent, text)
         return rtext
 
+    def build_text_ruby(self, param):
+        return [Text(f'{self.encode(rbase)}'
+                     '<rp>(</rp>'
+                     f'<rt>{self.encode(rtext)}</rt>'
+                     '<rp>)</rp>')
+                for rbase, rtext in param]
+
     # --------------------
 
     def build_none(self, _tag, _attribute, _element):
@@ -757,13 +802,79 @@ class GenHTML(Parser):
         text = self.get_element_children_text(element)
         return [self.text_indent, Text('<!-- '), Text(text), Text(' -->')]
 
-    def build_ruby_dict(self, _tag, _attribute, element):
+    def build_date(self, _tag, _attribute, element):
+        text = self.get_element_children_text(element)
+        return [Text(time.strftime(text if text else '%Y/%m/%d %H:%M:%S'))]
+
+    def build_ruby(self, tag, attribute, element):
+        tag, attribute = tag[1:], self.build_attribute_text(attribute)
+        ruby = self.build_element_ruby(element.children)
+        return [Text(f'<{tag}{attribute}>'), *ruby, Text(f'</{tag}>')]
+
+    def build_ruby_dict(self, _tag, attribute, element):
+        for name, value in attribute:
+            if name.lower() == 'dict':
+                self.update_ruby_dict_file(value)
         self.get_element_children_text(element)
         return []
 
-    def build_ruby(self, tag, attribute, element):
-        tag, ruby = tag[1:], self.build_element_ruby(element.children)
-        return [Text(f'<{tag}{attribute}>'), *ruby, Text(f'</{tag}>')]
+    def build_ruby_auto(self, tag, attribute, element):
+        tag, attribute = tag[1:], self.build_attribute_text(attribute)
+        stag = Text(f'<{tag}{attribute}>')
+        etag = Text(f'</{tag}>')
+
+        text = []
+        for child in element.children:
+            if child.tag:
+                text += self.build_element(child)
+                continue
+            base = child.text
+            if not base:
+                continue
+
+            bpos = 0
+            pending = ''
+            check = ''
+            mpos = self.rubymap
+            enter = False
+            while bpos < len(base):
+                bchr = base[bpos]
+                msub = mpos.child.get(bchr)
+                if msub:
+                    if pending:
+                        if enter:
+                            text.append(etag)
+                            enter = False
+                        text.append(Text(self.encode(pending)))
+                        pending = ''
+                    check += bchr
+                    bpos += 1
+                    mpos = msub
+                    continue
+
+                if not check:
+                    pending += bchr
+                    bpos += 1
+                    continue
+
+                if not enter:
+                    text.append(stag)
+                    enter = True
+                text += self.build_text_ruby(mpos.value)
+                check = ''
+                mpos = self.rubymap
+
+            if check:
+                if not enter:
+                    text.append(stag)
+                    enter = True
+                text += self.build_text_ruby(mpos.value)
+            if enter:
+                text.append(etag)
+            if pending:
+                text.append(Text(self.encode(pending)))
+
+        return text
 
     # --------------------
 
