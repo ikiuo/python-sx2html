@@ -535,8 +535,8 @@ class GenHTML(Parser):
             lines.pop(0)
         while lines and not lines[-1].strip():
             lines.pop()
-        cut = min([80, *[len(l) - len(l.lstrip()) for l in lines]])
-        return ''.join(indent + l[cut:] + '\n' for l in lines)
+        cut = min([80, *[len(l) - len(l.lstrip()) for l in lines if l]])
+        return ''.join((indent + l[cut:] + '\n' if l.strip() else '\n') for l in lines)
 
     def exec(self, src):
         self.locals['HTML'] = None
