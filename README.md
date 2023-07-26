@@ -16,10 +16,21 @@ HTML の
 
 ```lisp:
 (!DOCTYPE html)
+
+(#comment
+ "($pylocal [KEY=VALUE]) は、"
+ "(@python ...) で使用可能な変数名(KEY)を文字列(VALUE)で設定します。"
+ "($pylocal [KEY]) で文字列(VALUE)を取得します。")
+
+($pylocal
+ [TITLE="サンプル"]
+ [TEST="テスト"]
+ )
+
 (html[lang=ja]
  (head
   (meta [charset=utf-8])
-  (title "sample data")
+  (title ($pylocal [TITLE]))
 
   (@comment "このコメントは取り込まれて ＜！-- や --＞ なども反映するので注意")
   (#comment "このコメントは反映されない")
@@ -62,6 +73,8 @@ HTML の
    "の形式になります。")
 
  (body
+  (h1 ($pylocal [TEST]))
+
   (@comment "--> <p>@comment による悪戯</p> <!--")
   (p クォートしなくても大丈夫だけど(br)空白や記号により意図しない結果になる場合あり)
 
@@ -118,7 +131,7 @@ HTML の
 <html lang="ja">
   <head>
     <meta charset="utf-8">
-    <title>sample data</title>
+    <title>サンプル</title>
     <!-- このコメントは取り込まれて ＜！-- や --＞ なども反映するので注意 -->
     <style>
       body {
@@ -127,6 +140,7 @@ HTML の
     </style>
   </head>
   <body>
+    <h1>テスト</h1>
     <!-- --> <p>@comment による悪戯</p> <!-- -->
     <p>クォートしなくても大丈夫だけど<br>空白や記号により意図しない結果になる場合あり</p>
     <p><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>は<br><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>表記になり、<br>コロンがないと、最後の<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>が使用される</p>

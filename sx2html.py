@@ -453,8 +453,11 @@ class GenHTML(Parser):
 
     @staticmethod
     def encode(estr):
-        return (estr.replace('&', '&amp;').replace('<', '&lt;')
-                .replace('>', '&gt;').replace('"', '&quot;'))
+        return (estr
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;'))
 
     @staticmethod
     def run(command, stdin):
@@ -481,6 +484,7 @@ class GenHTML(Parser):
             '$ruby': self.build_ruby_auto,
             '@python': self.build_python_exec,
             '$python': self.build_python_run,
+            '$pylocal': self.build_python_local,
         }
         self.open_type = {
             '(': self.parse_element_tag,
@@ -545,7 +549,10 @@ class GenHTML(Parser):
         exec(src, self.globals, self.locals)
 
     def pyvalue(self, name):
-        return self.locals[name] if name and name in self.locals else None
+        return self.locals.get(name)
+
+    def pyvalue_set(self, name, value):
+        self.locals[name] = value
 
     # --------------------
 
@@ -738,12 +745,14 @@ class GenHTML(Parser):
         for elements in (attributes if attributes else []):
             attr = ''.join(self.build_text(self.build_element(element)) for element in elements)
             adata = attr.split('=', 1)
-            value = self.qstrip(adata[1] if len(adata) > 1 else '')
+            value = self.qstrip(adata[1]) if len(adata) > 1 else None
             rlist.append([adata[0], value])
         return rlist
 
     def build_attribute_text(self, attributes):
-        return ''.join(f' {name}="{self.encode(value)}"' for name, value in attributes)
+        return ''.join(
+            (f' {name}="{self.encode(value)}"' if value else f' {name}')
+            for name, value in attributes)
 
     def build_text(self, texts):
         rtext = ''
@@ -918,6 +927,17 @@ class GenHTML(Parser):
         return self.build_python(element.children,
                                  lambda s: self.run(PYTHON_COMMAND,
                                                     self.reindent('', s)))
+
+    def build_python_local(self, _tag, attribute, _element):
+        text = []
+        for key, value in attribute:
+            if value is None:
+                value = self.pyvalue(key)
+                if value:
+                    text += [Text(value)]
+            else:
+                self.pyvalue_set(key, value)
+        return text
 
     # --------------------
 
