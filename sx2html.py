@@ -392,29 +392,28 @@ class GenHTML(Parser):
 
     TAG_SINGLE = {
         'area',
-        'base', 'bgsound', 'br',
+        'base', 'bgsound',
         'col',
         'embed',
         'frame',
         'hr',
-        'image', 'img', 'input',
+        'image',
         'keygen',
         'link',
         'menuitem', 'meta',
         'param',
         'source',
         'track',
-        'wbr',
     }
 
     TAG_EMBED = {
         'a', 'abbr', 'acronym', 'audio',
-        'b', 'bdi', 'bdo', 'big', 'blink', 'br', 'button',
+        'b', 'bdi', 'bdo', 'big', 'blink', 'button',
         'canvas', 'cite', 'code',
         'data', 'del', 'dfn',
         'em',
         'font',
-        'i', 'img', 'input', 'ins',
+        'i', 'ins',
         'kbd',
         'label',
         'mark', 'meter',
@@ -427,6 +426,11 @@ class GenHTML(Parser):
         'textarea', 'th', 'td', 'time', 'tt',
         'u',
         'var',
+    }
+
+    TAG_EMBED_SINGLE = {
+        'br',
+        'img', 'input',
         'wbr',
     }
 
@@ -487,6 +491,7 @@ class GenHTML(Parser):
 
         self.tag_table = {}
         self.tag_table.update({tag: self.build_element_embed for tag in self.TAG_EMBED})
+        self.tag_table.update({tag: self.build_element_embed_single for tag in self.TAG_EMBED_SINGLE})
         self.tag_table.update({tag: self.build_element_single for tag in self.TAG_SINGLE})
         self.tag_table.update({tag: self.build_element_individual for tag in self.TAG_INDIVIDUAL})
 
@@ -506,18 +511,6 @@ class GenHTML(Parser):
         self.plain = False
 
     # --------------------
-
-    def is_single(self, tag):
-        return tag.lower() in self.TAG_SINGLE
-
-    def is_embed(self, tag):
-        return tag.lower() in self.TAG_EMBED
-
-    def is_individual(self, tag):
-        return tag.lower() in self.TAG_INDIVIDUAL
-
-    def is_altcode(self, tag):
-        return tag.lower() in self.TAG_ALTCODE
 
     def untabify(self, line):
         tab = self.tab_width
@@ -698,11 +691,14 @@ class GenHTML(Parser):
         return ([Text(stag)] if ltag in self.TAG_SINGLE else
                 [Text(stag), *children, Text(etag)])
 
+    def build_element_embed_single(self, _ltag, stag, _etag, _children):
+        return [Text(stag)]
+
     def build_element_single(self, _ltag, stag, _etag, _children):
         return [self.text_indent, Text(stag)]
 
     def build_element_individual(self, _ltag, stag, etag, children):
-        return [self.text_indent, Text(stag), *children, Text(etag)]
+        return [self.text_indent, Text(stag), *children, Text(etag), self.text_newline]
 
     def build_element_normal(self, _ltag, stag, etag, children):
         return [self.text_indent, Text(stag), self.text_enter, *children,

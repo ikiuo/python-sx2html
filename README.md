@@ -128,11 +128,8 @@ HTML の
   </head>
   <body>
     <!-- --> <p>@comment による悪戯</p> <!-- -->
-    <p>クォートしなくても大丈夫だけど
-      <br>空白や記号により意図しない結果になる場合あり</p>
-    <p><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>は
-      <br><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>表記になり、
-      <br>コロンがないと、最後の<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>が使用される</p>
+    <p>クォートしなくても大丈夫だけど<br>空白や記号により意図しない結果になる場合あり</p>
+    <p><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>は<br><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>や<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>表記になり、<br>コロンがないと、最後の<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp></ruby>が使用される</p>
     <p>$rubyでは<ruby>辞<rp>(</rp><rt>じ</rt><rp>)</rp>書<rp>(</rp><rt>しょ</rt><rp>)</rp></ruby>にある<ruby>文<rp>(</rp><rt>も</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt><rp>)</rp>列<rp>(</rp><rt>れつ</rt><rp>)</rp></ruby>を<ruby>自<rp>(</rp><rt>じ</rt><rp>)</rp>動<rp>(</rp><rt>どう</rt><rp>)</rp>的<rp>(</rp><rt>てき</rt><rp>)</rp></ruby>に<ruby>抽<rp>(</rp><rt>ちゅう</rt><rp>)</rp>出<rp>(</rp><rt>しゅつ</rt><rp>)</rp></ruby>して&lt;ruby&gt;を<ruby>生<rp>(</rp><rt>せい</rt><rp>)</rp>成<rp>(</rp><rt>せい</rt><rp>)</rp></ruby>する</p>
     <p>Python Test - exec(): OK</p>
     <p>Python Test - run(): OK</p>
